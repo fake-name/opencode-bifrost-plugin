@@ -23,7 +23,21 @@ An [opencode](https://opencode.ai) plugin that registers a self-hosted [Bifrost]
 
 ### Why environment variables instead of `opencode auth login`?
 
-opencode plugins get one hook that runs early enough to inject a fully-formed provider before opencode reads its config (`config`), but that hook has no way to read back a credential stored via opencode's interactive `/connect`/auth flow — the plugin SDK client only exposes `auth.set`, never `auth.get`. Environment variables are therefore the only way for this plugin to discover models automatically. If neither `BIFROST_BASE_URL` nor `BIFROST_API_KEY` is set, the plugin does nothing and leaves your config untouched.
+opencode plugins get one hook that runs early enough to inject a fully-formed provider before opencode reads its config (`config`), but that hook has no way to read back a credential stored via opencode's interactive `/connect`/auth flow — the plugin SDK client only exposes `auth.set`, never `auth.get`. Environment variables are therefore the recommended way for this plugin to discover models automatically. If neither `BIFROST_BASE_URL` nor `BIFROST_API_KEY` is set, the plugin does nothing and leaves your config untouched.
+
+### Alternative: `baseUrl`/`apiKey` plugin options
+
+If you can't set environment variables for your opencode setup, you can instead pass `baseUrl` and `apiKey` via the plugin's array form in `opencode.json`:
+
+```json
+{
+  "plugin": [
+    ["opencode-bifrost-plugin", { "baseUrl": "https://bifrost.example.com", "apiKey": "your-virtual-key" }]
+  ]
+}
+```
+
+These are only used as a fallback for whichever of `BIFROST_BASE_URL`/`BIFROST_API_KEY` isn't set — env vars always take precedence. Prefer env vars when you can, since `opencode.json` is often committed to source control and a virtual key checked in there will end up in your repo's history.
 
 ### Discovery cadence
 

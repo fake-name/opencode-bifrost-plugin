@@ -30,4 +30,29 @@ describe("getConnection", () => {
     expect(getConnection({ BIFROST_BASE_URL: "   ", BIFROST_API_KEY: "secret" })).toBeUndefined();
     expect(getConnection({ BIFROST_BASE_URL: "https://bifrost.example.com", BIFROST_API_KEY: "   " })).toBeUndefined();
   });
+
+  it("falls back to plugin options when env vars are unset", () => {
+    const connection = getConnection({}, { baseUrl: "https://bifrost.example.com/", apiKey: "secret" });
+    expect(connection).toEqual({ baseUrl: "https://bifrost.example.com", apiKey: "secret" });
+  });
+
+  it("prefers env vars over plugin options when both are set", () => {
+    const connection = getConnection(
+      { BIFROST_BASE_URL: "https://from-env.example.com", BIFROST_API_KEY: "env-secret" },
+      { baseUrl: "https://from-options.example.com", apiKey: "options-secret" },
+    );
+    expect(connection).toEqual({ baseUrl: "https://from-env.example.com", apiKey: "env-secret" });
+  });
+
+  it("mixes an env var with a plugin option when only one env var is set", () => {
+    const connection = getConnection(
+      { BIFROST_BASE_URL: "https://from-env.example.com" },
+      { apiKey: "options-secret" },
+    );
+    expect(connection).toEqual({ baseUrl: "https://from-env.example.com", apiKey: "options-secret" });
+  });
+
+  it("returns undefined when neither env vars nor plugin options are set", () => {
+    expect(getConnection({}, {})).toBeUndefined();
+  });
 });

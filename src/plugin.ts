@@ -10,8 +10,9 @@ const DISCOVERY_TIMEOUT_MS = 30_000;
 /**
  * Registers Bifrost as an opencode provider, discovering its models (and their context sizes)
  * from Bifrost's `/v1/models` endpoint. Connection is read from `BIFROST_BASE_URL` /
- * `BIFROST_API_KEY` env vars, and discovery runs once per opencode config load (opencode's plugin
- * `config` hook has no way to read back a credential stored via the interactive `/connect` flow).
+ * `BIFROST_API_KEY` env vars, falling back to the `baseUrl`/`apiKey` plugin options when a var
+ * isn't set. Discovery runs once per opencode config load (opencode's plugin `config` hook has no
+ * way to read back a credential stored via the interactive `/connect` flow).
  *
  * `datasheet` defaults to a fresh `Datasheet()` (the real getbifrost.ai lookup, cached under the
  * OS's default cache dir) but can be overridden - tests pass one pointed at an isolated temp dir
@@ -19,8 +20,9 @@ const DISCOVERY_TIMEOUT_MS = 30_000;
  */
 export function createBifrostPlugin(datasheet: Datasheet = new Datasheet()): Plugin {
   return async (_input, options?: PluginOptions) => {
+    const pluginOptions = options as BifrostPluginOptions | undefined;
     const config: Hooks["config"] = async (cfg) => {
-      const connection = getConnection();
+      const connection = getConnection(process.env, pluginOptions);
       if (!connection) {
         // Not configured - leave opencode's config untouched rather than registering an empty provider.
         return;
@@ -38,7 +40,7 @@ export function createBifrostPlugin(datasheet: Datasheet = new Datasheet()): Plu
         return;
       }
 
-      const overrides = (options as BifrostPluginOptions | undefined)?.contextSizeOverrides ?? {};
+      const overrides = pluginOptions?.contextSizeOverrides ?? {};
       const mapped = await toProviderModels(models, overrides, datasheet);
 
       cfg.provider ??= {};

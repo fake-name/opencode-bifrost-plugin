@@ -37,4 +37,18 @@ export interface BifrostPluginOptions {
    * Values are the model's max input tokens.
    */
   contextSizeOverrides?: Record<string, number>;
+
+  /**
+   * Fallback for the Bifrost gateway's base URL, used only when `BIFROST_BASE_URL` isn't set.
+   * Env vars remain the recommended way to configure this, since `opencode.json` is often
+   * committed to source control.
+   */
+  baseUrl?: string;
+
+  /**
+   * Fallback for the Bifrost virtual key, used only when `BIFROST_API_KEY` isn't set. Env vars
+   * remain the recommended way to configure this, since `opencode.json` is often committed to
+   * source control.
+   */
+  apiKey?: string;
 }

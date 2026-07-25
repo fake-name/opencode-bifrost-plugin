@@ -118,6 +118,21 @@ describe("BifrostPlugin config hook", () => {
     expect(cfg.provider).toBeUndefined();
   });
 
+  it("falls back to baseUrl/apiKey plugin options when env vars are unset", async () => {
+    delete process.env.BIFROST_BASE_URL;
+    delete process.env.BIFROST_API_KEY;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "openai/gpt-4o" }] })));
+
+    const hooks = await testPlugin({ baseUrl: "https://bifrost.example.com", apiKey: "virtual-key" });
+    const cfg: Record<string, any> = {};
+    await hooks.config?.(cfg as any);
+
+    expect(cfg.provider.bifrost.options).toEqual({
+      baseURL: "https://bifrost.example.com/v1",
+      apiKey: "virtual-key",
+    });
+  });
+
   it("passes contextSizeOverrides from plugin options through to the mapped models", async () => {
     process.env.BIFROST_BASE_URL = "https://bifrost.example.com";
     process.env.BIFROST_API_KEY = "virtual-key";
