@@ -1,11 +1,21 @@
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { PluginInput } from "@opencode-ai/plugin";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BifrostPlugin } from "../src/plugin.js";
+import { Datasheet } from "../src/datasheet.js";
+import { createBifrostPlugin } from "../src/plugin.js";
 
 const fakeInput = {} as PluginInput;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status });
+}
+
+async function testPlugin(options?: Record<string, unknown>) {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), "bifrost-plugin-test-"));
+  const hooks = await createBifrostPlugin(new Datasheet(cacheDir))(fakeInput, options);
+  return hooks;
 }
 
 let originalBaseUrl: string | undefined;
@@ -30,7 +40,7 @@ describe("BifrostPlugin config hook", () => {
     delete process.env.BIFROST_API_KEY;
     vi.stubGlobal("fetch", vi.fn());
 
-    const hooks = await BifrostPlugin(fakeInput);
+    const hooks = await testPlugin();
     const cfg: Record<string, unknown> = {};
     await hooks.config?.(cfg as any);
 
@@ -54,7 +64,7 @@ describe("BifrostPlugin config hook", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const hooks = await BifrostPlugin(fakeInput);
+    const hooks = await testPlugin();
     const cfg: Record<string, any> = {};
     await hooks.config?.(cfg as any);
 
@@ -74,7 +84,7 @@ describe("BifrostPlugin config hook", () => {
     process.env.BIFROST_API_KEY = "virtual-key";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "a/b" }] })));
 
-    const hooks = await BifrostPlugin(fakeInput);
+    const hooks = await testPlugin();
     const cfg: Record<string, any> = { provider: { other: { name: "Other" } } };
     await hooks.config?.(cfg as any);
 
@@ -88,7 +98,7 @@ describe("BifrostPlugin config hook", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const hooks = await BifrostPlugin(fakeInput);
+    const hooks = await testPlugin();
     const cfg: Record<string, unknown> = {};
     await expect(hooks.config?.(cfg as any)).resolves.toBeUndefined();
 
@@ -101,7 +111,7 @@ describe("BifrostPlugin config hook", () => {
     process.env.BIFROST_API_KEY = "virtual-key";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: [] })));
 
-    const hooks = await BifrostPlugin(fakeInput);
+    const hooks = await testPlugin();
     const cfg: Record<string, unknown> = {};
     await hooks.config?.(cfg as any);
 
@@ -113,7 +123,7 @@ describe("BifrostPlugin config hook", () => {
     process.env.BIFROST_API_KEY = "virtual-key";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: "ollama/llama3.1" }] })));
 
-    const hooks = await BifrostPlugin(fakeInput, { contextSizeOverrides: { ollama: 16384 } });
+    const hooks = await testPlugin({ contextSizeOverrides: { ollama: 16384 } });
     const cfg: Record<string, any> = {};
     await hooks.config?.(cfg as any);
 
