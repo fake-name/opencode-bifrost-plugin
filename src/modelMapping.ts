@@ -17,6 +17,20 @@ export interface ProviderModelConfig {
   modalities?: { input: Modality[]; output: Modality[] };
 }
 
+/**
+ * What this plugin knows about one Bifrost model once its context size and capabilities have been
+ * resolved, before it is formatted for a particular opencode plugin API. opencode v1 and v2
+ * describe models with different shapes, so both formatters start from this.
+ */
+export interface ResolvedModel {
+  id: string;
+  name: string;
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  toolCall: boolean;
+  imageInput: boolean;
+}
+
 type ContextSizeSource = "bifrost" | "sibling" | "datasheet" | "override" | "default";
 type ResolvedContextSize =
   | { maxInputTokens: number; source: "sibling"; sourceFamily: string }
@@ -80,17 +94,16 @@ async function resolveMaxInputTokens(
   return { maxInputTokens: DEFAULT_MAX_INPUT_TOKENS, source: "default" };
 }
 
-/** Converts a single Bifrost model into opencode's provider-config model shape. */
-export async function toProviderModel(
+/** Resolves one Bifrost model's context size and capabilities, independent of opencode's API version. */
+export async function resolveModel(
   model: BifrostModel,
   overrides: Record<string, number>,
   siblingContext: Map<string, SiblingContextEntry>,
   datasheet: Datasheet,
-): Promise<ProviderModelConfig> {
+): Promise<ResolvedModel> {
   const family = modelFamily(model.id);
   const resolved = await resolveMaxInputTokens(model, family, overrides, siblingContext, datasheet);
   const maxInputTokens = resolved.maxInputTokens;
-  const maxOutputTokens = model.max_output_tokens ?? Math.min(maxInputTokens, 4096);
 
   // Bifrost only carries rich catalog metadata (supported_parameters, etc.) for some providers
   // (e.g. its OpenRouter passthrough). When it's simply absent, assume tool calling works rather
@@ -98,31 +111,59 @@ export async function toProviderModel(
   const toolCall = model.supported_parameters
     ? model.supported_parameters.some((p) => p === "tools" || p === "tool_choice")
     : true;
-  const imageInput = model.architecture?.input_modalities?.includes("image") ?? false;
 
   return {
+    id: model.id,
     name: model.name ?? model.id,
+    maxInputTokens,
+    maxOutputTokens: model.max_output_tokens ?? Math.min(maxInputTokens, 4096),
+    toolCall,
+    imageInput: model.architecture?.input_modalities?.includes("image") ?? false,
+  };
+}
+
+/** Resolves every discovered Bifrost model, cross-referencing context sizes across providers. */
+export async function resolveModels(
+  models: readonly BifrostModel[],
+  overrides: Record<string, number>,
+  datasheet: Datasheet,
+): Promise<ResolvedModel[]> {
+  const siblingContext = buildSiblingContextIndex(models);
+  return Promise.all(models.map((model) => resolveModel(model, overrides, siblingContext, datasheet)));
+}
+
+/** Converts a single Bifrost model into opencode v1's provider-config model shape. */
+export async function toProviderModel(
+  model: BifrostModel,
+  overrides: Record<string, number>,
+  siblingContext: Map<string, SiblingContextEntry>,
+  datasheet: Datasheet,
+): Promise<ProviderModelConfig> {
+  return toProviderModelConfig(await resolveModel(model, overrides, siblingContext, datasheet));
+}
+
+/** Formats a resolved model for opencode v1's `provider.<id>.models.<id>` config. */
+export function toProviderModelConfig(resolved: ResolvedModel): ProviderModelConfig {
+  return {
+    name: resolved.name,
     temperature: true,
     reasoning: false,
-    tool_call: toolCall,
-    attachment: imageInput,
-    limit: { context: maxInputTokens, output: maxOutputTokens },
+    tool_call: resolved.toolCall,
+    attachment: resolved.imageInput,
+    limit: { context: resolved.maxInputTokens, output: resolved.maxOutputTokens },
     modalities: {
-      input: imageInput ? ["text", "image"] : ["text"],
+      input: resolved.imageInput ? ["text", "image"] : ["text"],
       output: ["text"] as Modality[],
     },
   };
 }
 
-/** Converts every discovered Bifrost model into opencode's `provider.bifrost.models` map. */
+/** Converts every discovered Bifrost model into opencode v1's `provider.bifrost.models` map. */
 export async function toProviderModels(
   models: readonly BifrostModel[],
   overrides: Record<string, number>,
   datasheet: Datasheet,
 ): Promise<Record<string, ProviderModelConfig>> {
-  const siblingContext = buildSiblingContextIndex(models);
-  const entries = await Promise.all(
-    models.map(async (model) => [model.id, await toProviderModel(model, overrides, siblingContext, datasheet)] as const),
-  );
-  return Object.fromEntries(entries);
+  const resolved = await resolveModels(models, overrides, datasheet);
+  return Object.fromEntries(resolved.map((model) => [model.id, toProviderModelConfig(model)]));
 }

@@ -2,7 +2,7 @@
   "name": "opencode-bifrost-plugin",
   "displayName": "Bifrost opencode Plugin",
   "description": "opencode LLM provider for a self-hosted Bifrost gateway, with automatic model and context-size discovery.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "Yeti47",
   "license": "MIT",
   "type": "module",
@@ -31,6 +31,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.0.5"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "1.18.5",
