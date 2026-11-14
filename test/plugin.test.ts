@@ -74,7 +74,7 @@ describe("BifrostPlugin config hook", () => {
       apiKey: "virtual-key",
     });
     expect(cfg.provider.bifrost.models["openai/gpt-4o"]).toMatchObject({
-      name: "GPT-4o",
+      name: "OpenAI: gpt-4o",
       limit: { context: 128000, output: 16384 },
     });
   });

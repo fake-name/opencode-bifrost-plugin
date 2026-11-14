@@ -98,7 +98,7 @@ describe("BifrostPlugin v2 setup", () => {
       id: "openai/gpt-4o",
       modelID: "openai/gpt-4o",
       providerID: "bifrost",
-      name: "GPT-4o",
+      name: "OpenAI: gpt-4o",
       limit: { context: 128000, output: 16384 },
     });
   });

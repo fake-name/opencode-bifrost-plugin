@@ -45,6 +45,33 @@ export function modelFamily(modelId: string): string {
   return modelId.includes("/") ? modelId.split("/")[0] : modelId;
 }
 
+/** Readable labels for Bifrost provider prefixes; unknown prefixes are shown as they appear in the id. */
+const PROVIDER_LABELS = new Map<string, string>([
+  ["anthropic", "Anthropic"],
+  ["gemini", "Gemini"],
+  ["groq", "Groq"],
+  ["mistral", "Mistral"],
+  ["ollama", "Ollama"],
+  ["openai", "OpenAI"],
+  ["opencode-go", "OpenCode Go"],
+  ["openrouter", "OpenRouter"],
+]);
+
+/**
+ * Builds the picker label `{ProviderName}: {ModelName}` from a Bifrost id, so the same model served
+ * by different providers can be told apart, e.g. "openrouter/anthropic/claude-haiku-5.5" becomes
+ * "OpenRouter: claude-haiku-5.5". The model name is the id's last segment, with its case kept.
+ */
+export function modelDisplayName(modelId: string): string {
+  const slash = modelId.indexOf("/");
+  if (slash === -1) {
+    return modelId;
+  }
+  const provider = modelId.slice(0, slash);
+  const modelName = modelId.slice(modelId.lastIndexOf("/") + 1);
+  return `${PROVIDER_LABELS.get(provider) ?? provider}: ${modelName}`;
+}
+
 /** Maps each base model name to the best context size any provider in this fetch reported directly. */
 export function buildSiblingContextIndex(models: readonly BifrostModel[]): Map<string, SiblingContextEntry> {
   const index = new Map<string, SiblingContextEntry>();
@@ -114,7 +141,7 @@ export async function resolveModel(
 
   return {
     id: model.id,
-    name: model.name ?? model.id,
+    name: modelDisplayName(model.id),
     maxInputTokens,
     maxOutputTokens: model.max_output_tokens ?? Math.min(maxInputTokens, 4096),
     toolCall,

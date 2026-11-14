@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Datasheet } from "../src/datasheet.js";
-import { buildSiblingContextIndex, modelFamily, toProviderModel, toProviderModels } from "../src/modelMapping.js";
+import {
+  buildSiblingContextIndex,
+  modelDisplayName,
+  modelFamily,
+  toProviderModel,
+  toProviderModels,
+} from "../src/modelMapping.js";
 import type { BifrostModel } from "../src/types.js";
 
 afterEach(() => {
@@ -119,11 +125,15 @@ describe("toProviderModel capabilities", () => {
     expect(result.modalities?.input).toEqual(["text", "image"]);
   });
 
-  it("uses the model id as a name fallback", async () => {
+  it("names models as ProviderName: ModelName, ignoring Bifrost's own name", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no datasheet")));
-    const model: BifrostModel = { id: "provider/model-x", max_input_tokens: 1 };
+    const model: BifrostModel = {
+      id: "openrouter/anthropic/claude-haiku-5.5",
+      name: "Anthropic: Claude Haiku 5.5",
+      max_input_tokens: 1,
+    };
     const result = await toProviderModel(model, {}, new Map(), await tmpDatasheet());
-    expect(result.name).toBe("provider/model-x");
+    expect(result.name).toBe("OpenRouter: claude-haiku-5.5");
   });
 
   it("caps max output tokens to the context window when Bifrost reports neither", async () => {
@@ -144,5 +154,21 @@ describe("toProviderModels", () => {
     const result = await toProviderModels(models, {}, await tmpDatasheet());
     expect(Object.keys(result)).toEqual(["openai/gpt-4o", "ollama/llama3.1"]);
     expect(result["openai/gpt-4o"].limit?.context).toBe(128000);
+  });
+});
+
+describe("modelDisplayName", () => {
+  it("labels the provider and keeps only the model name", () => {
+    expect(modelDisplayName("openrouter/anthropic/claude-haiku-5.5")).toBe("OpenRouter: claude-haiku-5.5");
+    expect(modelDisplayName("ollama/Llama3.1")).toBe("Ollama: Llama3.1");
+    expect(modelDisplayName("opencode-go/kimi-k3")).toBe("OpenCode Go: kimi-k3");
+  });
+
+  it("shows unknown provider prefixes as they appear in the id", () => {
+    expect(modelDisplayName("custom/mystery-model")).toBe("custom: mystery-model");
+  });
+
+  it("returns ids with no provider prefix unchanged", () => {
+    expect(modelDisplayName("gpt-4o")).toBe("gpt-4o");
   });
 });
