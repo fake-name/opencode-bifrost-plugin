@@ -162,6 +162,8 @@ describe("modelDisplayName", () => {
     expect(modelDisplayName("openrouter/anthropic/claude-haiku-5.5")).toBe("OpenRouter: claude-haiku-5.5");
     expect(modelDisplayName("ollama/Llama3.1")).toBe("Ollama: Llama3.1");
     expect(modelDisplayName("opencode-go/kimi-k3")).toBe("OpenCode Go: kimi-k3");
+    expect(modelDisplayName("github-copilot/claude-haiku-4.5")).toBe("GitHub Copilot: claude-haiku-4.5");
+    expect(modelDisplayName("bedrock_mantle/some-model")).toBe("Bedrock Mantle: some-model");
   });
 
   it("shows unknown provider prefixes as they appear in the id", () => {

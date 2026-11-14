@@ -45,16 +45,48 @@ export function modelFamily(modelId: string): string {
   return modelId.includes("/") ? modelId.split("/")[0] : modelId;
 }
 
-/** Readable labels for Bifrost provider prefixes; unknown prefixes are shown as they appear in the id. */
+/**
+ * Display names for Bifrost's built-in provider prefixes, as listed in its supported-providers docs
+ * (https://docs.getbifrost.ai/providers/supported-providers/overview). Unknown prefixes, such as
+ * custom providers, are shown as they appear in the id.
+ */
 const PROVIDER_LABELS = new Map<string, string>([
   ["anthropic", "Anthropic"],
+  ["azure", "Azure"],
+  ["bedrock", "Bedrock"],
+  ["bedrock_mantle", "Bedrock Mantle"],
+  ["byteplus", "BytePlus"],
+  ["cerebras", "Cerebras"],
+  ["cloudflare", "Cloudflare"],
+  ["cohere", "Cohere"],
+  ["databricks", "Databricks"],
+  ["deepseek", "DeepSeek"],
+  ["elevenlabs", "Elevenlabs"],
+  ["fireworks", "Fireworks"],
   ["gemini", "Gemini"],
+  ["github-copilot", "GitHub Copilot"],
   ["groq", "Groq"],
+  ["huggingface", "Hugging Face"],
+  ["minimax", "MiniMax"],
   ["mistral", "Mistral"],
+  ["nebius", "Nebius"],
   ["ollama", "Ollama"],
   ["openai", "OpenAI"],
   ["opencode-go", "OpenCode Go"],
   ["openrouter", "OpenRouter"],
+  ["parasail", "Parasail"],
+  ["perplexity", "Perplexity"],
+  ["replicate", "Replicate"],
+  ["runware", "Runware"],
+  ["runway", "Runway"],
+  ["sagemaker", "SageMaker"],
+  ["sarvam", "Sarvam AI"],
+  ["sgl", "SGL"],
+  ["typesafe", "TypeSafe"],
+  ["vertex", "Vertex AI"],
+  ["vllm", "vLLM"],
+  ["wafer", "Wafer"],
+  ["xai", "xAI"],
 ]);
 
 /**
