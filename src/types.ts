@@ -19,6 +19,9 @@ export interface BifrostModel {
   max_output_tokens?: number;
   architecture?: BifrostModelArchitecture;
   supported_parameters?: string[];
+  reasoning?: {
+    supported_efforts?: string[];
+  };
 }
 
 export interface BifrostModelsResponse {

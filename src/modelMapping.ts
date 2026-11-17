@@ -11,6 +11,7 @@ export interface ProviderModelConfig {
   name?: string;
   temperature?: boolean;
   reasoning?: boolean;
+  variants?: Record<string, { reasoningEffort?: string; disabled?: boolean }>;
   tool_call?: boolean;
   attachment?: boolean;
   limit?: { context: number; output: number };
@@ -29,6 +30,45 @@ export interface ResolvedModel {
   maxOutputTokens: number;
   toolCall: boolean;
   imageInput: boolean;
+  reasoningEfforts: string[];
+}
+
+const KNOWN_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+const DEFAULT_EFFORTS = ["low", "medium", "high"];
+const CLAUDE_55_EFFORTS = [...DEFAULT_EFFORTS, "xhigh", "max"];
+const CLAUDE_55 = /(?:^|[./_-])claude-(?:opus|sonnet|haiku)-5[.-]5(?:-\d{8})?(?:-v\d+:\d+)?$/i;
+
+/** Keep the routing id intact; only inspect its underlying model suffix for missing metadata. */
+export function reasoningEfforts(model: BifrostModel): string[] {
+  const advertised = model.reasoning?.supported_efforts;
+  if (Array.isArray(advertised)) {
+    // An explicit list, including an empty one, wins over name-based inference.
+    return [...new Set(advertised
+      .filter((effort): effort is string => typeof effort === "string")
+      .map((effort) => effort.trim().toLowerCase())
+      .filter((effort) => KNOWN_EFFORTS.has(effort)))];
+  }
+
+  // Native ids and generated aliases such as:
+  // bedrock_mantle/opus-project-name-anthropic.claude-opus-5-5
+  // Limit inference to the known 5.5 triplet, not all Claude or all gateway models.
+  if (CLAUDE_55.test(model.id)) return [...CLAUDE_55_EFFORTS];
+  return model.supported_parameters?.includes("reasoning_effort") ? [...DEFAULT_EFFORTS] : [];
+}
+
+/** UI choices can differ from wire values: adaptive is a mode, not an effort. */
+export function reasoningVariants(resolved: ResolvedModel): Record<string, { reasoningEffort?: string }> {
+  const variants: Record<string, { reasoningEffort?: string }> = {};
+  if (CLAUDE_55.test(resolved.id) && resolved.reasoningEfforts.length > 0) {
+    // Claude 5.5 defaults to adaptive thinking. Leave effort to the upstream default.
+    variants.adaptive = {};
+    // Match Maki's minimal choice without sending an unsupported Claude effort.
+    if (resolved.reasoningEfforts.includes("low") && !resolved.reasoningEfforts.includes("minimal")) {
+      variants.minimal = { reasoningEffort: "low" };
+    }
+  }
+  for (const effort of resolved.reasoningEfforts) variants[effort] = { reasoningEffort: effort };
+  return variants;
 }
 
 type ContextSizeSource = "bifrost" | "sibling" | "datasheet" | "override" | "default";
@@ -178,6 +218,7 @@ export async function resolveModel(
     maxOutputTokens: model.max_output_tokens ?? Math.min(maxInputTokens, 4096),
     toolCall,
     imageInput: model.architecture?.input_modalities?.includes("image") ?? false,
+    reasoningEfforts: reasoningEfforts(model),
   };
 }
 
@@ -203,10 +244,19 @@ export async function toProviderModel(
 
 /** Formats a resolved model for opencode v1's `provider.<id>.models.<id>` config. */
 export function toProviderModelConfig(resolved: ResolvedModel): ProviderModelConfig {
+  const variants: NonNullable<ProviderModelConfig["variants"]> = reasoningVariants(resolved);
+  // v1 merges these with its own low/medium/high variants. Disable any that
+  // Bifrost explicitly omitted, so unsupported choices cannot reappear in the UI.
+  if (resolved.reasoningEfforts.length > 0) {
+    for (const effort of DEFAULT_EFFORTS) {
+      if (!(effort in variants)) variants[effort] = { disabled: true };
+    }
+  }
   return {
     name: resolved.name,
     temperature: true,
-    reasoning: false,
+    reasoning: resolved.reasoningEfforts.length > 0,
+    variants,
     tool_call: resolved.toolCall,
     attachment: resolved.imageInput,
     limit: { context: resolved.maxInputTokens, output: resolved.maxOutputTokens },

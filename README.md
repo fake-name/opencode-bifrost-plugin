@@ -57,6 +57,40 @@ These are only used as a fallback for whichever of `BIFROST_BASE_URL`/`BIFROST_A
 
 This plugin discovers models **once per plugin load** — v2 `setup`, v1 `config`. Restart opencode (or reload its config) to pick up newly added or removed Bifrost models.
 
+## Reasoning effort
+
+Discovered models expose effort choices in both OpenCode v1 and v2. The plugin uses
+Bifrost's `reasoning.supported_efforts` when provided, preserving its supported set
+(including an explicit empty list).
+
+When that metadata is missing, Claude Opus, Sonnet, and Haiku **5.5** expose
+`low`, `medium`, `high`, `xhigh`, and `max`. Recognition uses the underlying model
+suffix, so project aliases such as
+`bedrock_mantle/opus-project-name-anthropic.claude-opus-5-5` work without per-alias
+configuration. The full discovered ID remains the routing ID. Other models that
+advertise `reasoning_effort` in `supported_parameters` get `low`, `medium`, and
+`high`; otherwise reasoning is left disabled.
+
+For these Claude 5.5 models, the picker also includes two convenience choices:
+
+| Choice | Request behavior |
+| --- | --- |
+| `adaptive` | Adds no effort override; uses adaptive thinking at the upstream's default effort. |
+| `minimal` | Sends `low`, Claude's lowest supported effort, matching Maki's mapping. |
+
+`minimal` is added only when `low` is supported (unless the gateway explicitly
+advertises native `minimal`). An explicit empty effort list adds no variants.
+All five named Claude efforts still use adaptive thinking: effort guides how
+often and how deeply the model thinks; it does not impose a fixed token budget.
+`adaptive` does not remove effort overrides you configure elsewhere in OpenCode.
+
+Effort choices send `reasoningEffort` through OpenCode's OpenAI-compatible adapter
+(the HTTP field is `reasoning_effort`). The gateway still translates it for the
+upstream provider. The plugin never sends `reasoning_effort: "adaptive"` or
+legacy `thinking.type: "enabled"`/`budget_tokens` for these models.
+See [Anthropic's effort documentation](https://platform.claude.com/docs/en/build-with-claude/effort)
+and [Bedrock's adaptive thinking documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-adaptive-thinking.html).
+
 ## Context size resolution
 
 Not every Bifrost provider reports `context_length`/`max_input_tokens` (its OpenRouter passthrough does; providers like Ollama, Cloudflare Workers AI, or custom OpenAI-compatible ones typically don't). When Bifrost doesn't know, the plugin tries, in order:

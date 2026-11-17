@@ -35,6 +35,30 @@ afterEach(() => {
 });
 
 describe("BifrostPlugin config hook", () => {
+  it("registers Claude 5.5 thinking choices for project aliases using JSON plugin options", async () => {
+    delete process.env.BIFROST_BASE_URL;
+    delete process.env.BIFROST_API_KEY;
+    const ids = ["opus", "sonnet", "haiku"].map((family) =>
+      `bedrock_mantle/${family}-charge-number-anthropic.claude-${family}-5-5`,
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: ids.map((id) => ({ id, context_length: 1_000_000, max_output_tokens: 128_000 })),
+    })));
+    const hooks = await testPlugin({ baseUrl: "http://localhost:8080", apiKey: "test-virtual-key" });
+    const cfg: Record<string, any> = {};
+    await hooks.config?.(cfg as any);
+    expect(Object.keys(cfg.provider.bifrost.models)).toEqual(ids);
+    for (const id of ids) {
+      expect(cfg.provider.bifrost.models[id]).toMatchObject({
+        reasoning: true, limit: { context: 1_000_000, output: 128_000 },
+      });
+      expect(cfg.provider.bifrost.models[id].variants).toEqual({
+        adaptive: {}, minimal: { reasoningEffort: "low" },
+        ...Object.fromEntries(["low", "medium", "high", "xhigh", "max"].map((effort) => [effort, { reasoningEffort: effort }])),
+      });
+    }
+  });
+
   it("leaves config untouched when the connection env vars are missing", async () => {
     delete process.env.BIFROST_BASE_URL;
     delete process.env.BIFROST_API_KEY;

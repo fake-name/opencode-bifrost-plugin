@@ -61,6 +61,31 @@ afterEach(() => {
 });
 
 describe("BifrostPlugin v2 setup", () => {
+  it("registers thinking choices for dynamically discovered Opus, Sonnet and Haiku aliases", async () => {
+    delete process.env.BIFROST_BASE_URL;
+    delete process.env.BIFROST_API_KEY;
+    const ids = ["opus", "sonnet", "haiku"].map((family) =>
+      `bedrock_mantle/${family}-project-123-anthropic.claude-${family}-5-5`,
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: ids.map((id) => ({ id, context_length: 1_000_000, max_output_tokens: 128_000 })),
+    })));
+
+    const { added } = await runSetup({ baseUrl: "http://localhost:8080", apiKey: "test-virtual-key" });
+    expect(added[0].models.map((model) => model.id)).toEqual(ids);
+    for (const model of added[0].models) {
+      expect(model.modelID).toBe(model.id);
+      expect(model.limit).toEqual({ context: 1_000_000, output: 128_000 });
+      expect(model.variants).toEqual([
+        { id: "adaptive", settings: {} },
+        { id: "minimal", settings: { reasoningEffort: "low" } },
+        ...["low", "medium", "high", "xhigh", "max"].map((effort) => ({
+          id: effort, settings: { reasoningEffort: effort },
+        })),
+      ]);
+    }
+  });
+
   it("contributes nothing when the connection env vars are missing", async () => {
     delete process.env.BIFROST_BASE_URL;
     delete process.env.BIFROST_API_KEY;

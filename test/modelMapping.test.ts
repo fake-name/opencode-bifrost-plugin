@@ -7,6 +7,7 @@ import {
   buildSiblingContextIndex,
   modelDisplayName,
   modelFamily,
+  reasoningEfforts,
   toProviderModel,
   toProviderModels,
 } from "../src/modelMapping.js";
@@ -29,6 +30,92 @@ describe("modelFamily", () => {
   it("falls back to the whole id with no provider prefix", () => {
     expect(modelFamily("gpt-4o")).toBe("gpt-4o");
   });
+});
+
+describe("reasoning effort discovery", () => {
+  const allEfforts = ["low", "medium", "high", "xhigh", "max"];
+
+  it.each(["opus", "sonnet", "haiku"])("recognizes %s 5.5 across arbitrary project aliases", async (family) => {
+    const ids = ["project-a", "another-project-123", "sonnet-in-project-name"].map(
+      (project) => `bedrock_mantle/${family}-${project}-anthropic.claude-${family}-5-5`,
+    );
+    const models = ids.map((id) => ({ id, context_length: 1_000_000, max_output_tokens: 128_000 }));
+    const result = await toProviderModels(models, {}, await tmpDatasheet());
+    expect(Object.keys(result)).toEqual(ids);
+    for (const id of ids) {
+      expect(result[id].reasoning).toBe(true);
+      expect(result[id].variants).toEqual({
+        adaptive: {}, minimal: { reasoningEffort: "low" },
+        ...Object.fromEntries(allEfforts.map((effort) => [effort, { reasoningEffort: effort }])),
+      });
+      expect(result[id].limit).toEqual({ context: 1_000_000, output: 128_000 });
+    }
+  });
+
+  it.each([
+    "anthropic/claude-opus-5-5",
+    "openrouter/anthropic/claude-sonnet-5.5",
+    "bedrock/us-gov.anthropic.claude-haiku-5-5-v1:0",
+  ])("recognizes the native model id %s", (id) => {
+    expect(reasoningEfforts({ id })).toEqual(allEfforts);
+  });
+
+  it("uses advertised efforts instead of guessing from the model name", () => {
+    expect(reasoningEfforts({
+      id: "bedrock_mantle/opus-project-anthropic.claude-opus-5-5",
+      reasoning: { supported_efforts: [" HIGH ", "low", "high", "not-a-level"] },
+    })).toEqual(["high", "low"]);
+    expect(reasoningEfforts({
+      id: "claude-haiku-5-5",
+      reasoning: { supported_efforts: [] },
+    })).toEqual([]);
+  });
+
+  it("supports arbitrary aliases when Bifrost reports effort metadata", () => {
+    expect(reasoningEfforts({
+      id: "custom/completely-opaque-alias",
+      reasoning: { supported_efforts: ["none", "minimal", "low", "medium", "high", "xhigh", "max"] },
+    })).toEqual(["none", "minimal", ...allEfforts]);
+  });
+
+  it("keeps all five Claude levels even when supported_parameters is present", () => {
+    expect(reasoningEfforts({ id: "claude-sonnet-5-5", supported_parameters: ["reasoning_effort"] })).toEqual(allEfforts);
+    expect(reasoningEfforts({ id: "custom/reasoner", supported_parameters: ["reasoning_effort"] })).toEqual(["low", "medium", "high"]);
+  });
+
+  it("prevents OpenCode v1 from reintroducing effort levels excluded by discovery", async () => {
+    const result = await toProviderModel({
+      id: "claude-opus-5-5", context_length: 1_000_000,
+      reasoning: { supported_efforts: ["high"] },
+    }, {}, new Map(), await tmpDatasheet());
+    expect(result.variants).toEqual({
+      adaptive: {}, high: { reasoningEffort: "high" },
+      low: { disabled: true }, medium: { disabled: true },
+    });
+  });
+
+  it("leaves explicit non-reasoning models without any variants", async () => {
+    const result = await toProviderModel({
+      id: "claude-haiku-5-5", context_length: 1_000_000,
+      reasoning: { supported_efforts: [] },
+    }, {}, new Map(), await tmpDatasheet());
+    expect(result.reasoning).toBe(false);
+    expect(result.variants).toEqual({});
+  });
+
+  it("preserves native minimal when the gateway explicitly supports it", async () => {
+    const result = await toProviderModel({
+      id: "claude-sonnet-5-5", context_length: 1_000_000,
+      reasoning: { supported_efforts: ["minimal", "low", "medium", "high"] },
+    }, {}, new Map(), await tmpDatasheet());
+    expect(result.variants?.minimal).toEqual({ reasoningEffort: "minimal" });
+  });
+
+  it.each(["openai/gpt-4o", "custom/mystery", "claude-haiku-4-5", "claude-opus-5-50", "claude-opus-5-5-preview"])(
+    "does not infer reasoning from unrelated or unknown model %s", (id) => {
+      expect(reasoningEfforts({ id })).toEqual([]);
+    },
+  );
 });
 
 describe("toProviderModel context size resolution", () => {
