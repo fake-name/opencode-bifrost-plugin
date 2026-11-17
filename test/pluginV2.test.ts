@@ -164,7 +164,7 @@ describe("BifrostPlugin v2 setup", () => {
     const { transform } = await runSetup();
 
     expect(transform).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledOnce();
+    expect(errorSpy).toHaveBeenCalledWith("[bifrost] failed to discover models: connection refused");
     errorSpy.mockRestore();
   });
 

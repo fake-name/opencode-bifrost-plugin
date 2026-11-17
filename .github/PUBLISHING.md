@@ -6,7 +6,7 @@ Releases are published to npm automatically by [`workflows/publish.yml`](workflo
 
 Trusted publishing can only be configured for a package that already exists on the registry:
 
-1. Publish the first version manually: `npm run build && npm publish` (requires `npm login` or an npm token locally).
+1. Publish the first version manually: `npm run compile && npm publish` (requires `npm login` or an npm token locally).
 2. On npmjs.com, go to the package's **Settings → Trusted publishing** and add a GitHub Actions publisher with:
    - Organization/user: `Yeti47`
    - Repository: `opencode-bifrost-plugin`

@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { getConnection } from "../src/connection.js";
 
 describe("getConnection", () => {
+  it("accepts provider-style baseURL with a /v1 suffix", () => {
+    expect(getConnection({}, { baseURL: "http://localhost:8080/v1/", apiKey: "test-key" })).toEqual({
+      baseUrl: "http://localhost:8080", apiKey: "test-key",
+    });
+  });
+
+  it("normalizes a /v1 suffix while preserving a reverse-proxy path", () => {
+    expect(getConnection({ BIFROST_BASE_URL: "https://example.com/gateway/v1", BIFROST_API_KEY: "test-key" })).toEqual({
+      baseUrl: "https://example.com/gateway", apiKey: "test-key",
+    });
+  });
+
+  it("rejects non-HTTP URLs", () => {
+    expect(getConnection({}, { baseUrl: "file:///tmp/gateway", apiKey: "test-key" })).toBeUndefined();
+  });
+
   it("returns undefined when neither env var is set", () => {
     expect(getConnection({})).toBeUndefined();
   });

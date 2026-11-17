@@ -47,6 +47,8 @@ export interface BifrostPluginOptions {
    * committed to source control.
    */
   baseUrl?: string;
+  /** Also accept the spelling used by OpenCode's provider options. */
+  baseURL?: string;
 
   /**
    * Fallback for the Bifrost virtual key, used only when `BIFROST_API_KEY` isn't set. Env vars

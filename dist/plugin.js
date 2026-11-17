@@ -21,10 +21,12 @@ export function createBifrostPlugin(datasheet = new Datasheet()) {
             const connection = getConnection(process.env, pluginOptions);
             if (!connection) {
                 // Not configured - leave opencode's config untouched rather than registering an empty provider.
+                console.warn("[bifrost] not configured: set a valid HTTP(S) baseUrl (or baseURL) and apiKey in plugin options, or BIFROST_BASE_URL and BIFROST_API_KEY.");
                 return;
             }
             let models;
             try {
+                console.error("[bifrost] discovering models from the configured gateway...");
                 models = await fetchModels(connection, AbortSignal.timeout(DISCOVERY_TIMEOUT_MS));
             }
             catch (err) {
@@ -32,6 +34,7 @@ export function createBifrostPlugin(datasheet = new Datasheet()) {
                 return;
             }
             if (models.length === 0) {
+                console.warn("[bifrost] discovery returned no models; check the virtual key's model access in Bifrost.");
                 return;
             }
             const overrides = pluginOptions?.contextSizeOverrides ?? {};
@@ -46,6 +49,7 @@ export function createBifrostPlugin(datasheet = new Datasheet()) {
                 },
                 models: mapped,
             };
+            console.error(`[bifrost] registered ${models.length} models.`);
         };
         return { config };
     };

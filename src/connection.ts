@@ -13,13 +13,15 @@ export function getConnection(
   env: NodeJS.ProcessEnv = process.env,
   options?: BifrostPluginOptions,
 ): BifrostConnection | undefined {
-  const baseUrl = (env.BIFROST_BASE_URL?.trim() || options?.baseUrl?.trim())?.replace(/\/+$/, "");
+  const inputUrl = env.BIFROST_BASE_URL?.trim() || options?.baseUrl?.trim() || options?.baseURL?.trim();
+  const baseUrl = inputUrl?.replace(/\/+$/, "").replace(/\/v1$/, "");
   const apiKey = env.BIFROST_API_KEY?.trim() || options?.apiKey?.trim();
   if (!baseUrl || !apiKey) {
     return undefined;
   }
   try {
-    new URL(baseUrl);
+    const url = new URL(baseUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
   } catch {
     return undefined;
   }

@@ -27,13 +27,20 @@ For OpenCode v1, replace the old model-discovery plugin with this entry in
 ```
 
 Use the gateway root for `baseUrl`, without `/v1`; the plugin appends that path.
+The provider-style spelling `baseURL` and a trailing `/v1` are also accepted.
 The plugin creates `provider.bifrost` itself, so remove the previous manual
 Bifrost provider block. Connection values belong in the plugin options above
 unless you use the environment variables described below.
 
 This fork includes `dist` so Git installs work without lifecycle scripts or a
-local TypeScript compiler. After editing source, run `npm run build` and commit
+local TypeScript compiler. After editing source, run `npm run compile` and commit
 the updated `dist` files along with the source changes.
+
+The command is deliberately named `compile`: npm treats a script named `build`
+as a reason to prepare Git dependencies, even with install scripts disabled.
+That preparation step fails inside OpenCode 1.19.6 (`git dep preparation failed`).
+Keeping the compiled files in Git and avoiding those preparation hooks lets
+OpenCode install the plugin directly.
 
 ### Published package
 
@@ -87,6 +94,11 @@ These are only used as a fallback for whichever of `BIFROST_BASE_URL`/`BIFROST_A
 ### Discovery cadence
 
 This plugin discovers models **once per plugin load** — v2 `setup`, v1 `config`. Restart opencode (or reload its config) to pick up newly added or removed Bifrost models.
+
+Startup output includes `[bifrost]` messages for discovery and the number of
+registered models, or an explanation if configuration is missing, discovery
+fails, or the gateway returns no models. On v1, use
+`opencode models bifrost --print-logs` to inspect this output.
 
 ## Reasoning effort
 
@@ -148,11 +160,11 @@ On opencode v1, use the array form (`["opencode-bifrost-plugin", { "contextSizeO
 
 ```sh
 npm install
-npm run build   # or: npm run watch
+npm run compile   # or: npm run watch
 npm test
 ```
 
-To try local changes against a real opencode install before publishing, run `npm run build` and point `opencode.json` at this directory instead of the npm package name — `{ "plugins": ["/path/to/opencode-bifrost-plugin"] }` on v2, `{ "plugin": ["/path/to/opencode-bifrost-plugin"] }` on v1. See opencode's plugin docs ([v2](https://opencode.ai/v2/docs/plugins/), [v1](https://opencode.ai/docs/plugins/)).
+To try local changes against a real opencode install before publishing, run `npm run compile` and point `opencode.json` at this directory instead of the npm package name — `{ "plugins": ["/path/to/opencode-bifrost-plugin"] }` on v2, `{ "plugin": ["/path/to/opencode-bifrost-plugin"] }` on v1. See opencode's plugin docs ([v2](https://opencode.ai/v2/docs/plugins/), [v1](https://opencode.ai/docs/plugins/)).
 
 ### Supporting two opencode versions
 
