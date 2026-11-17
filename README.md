@@ -6,6 +6,37 @@ Works with both opencode v2 and opencode v1 from the same package.
 
 ## Setup
 
+### Install this fork directly from Git
+
+For OpenCode v1, replace the old model-discovery plugin with this entry in
+`opencode.jsonc` (keep any other plugins you use):
+
+```json
+{
+  "plugin": [
+    [
+      "opencode-bifrost-plugin@git+https://github.com/fake-name/opencode-bifrost-plugin.git",
+      {
+        "baseUrl": "http://localhost:8080",
+        "apiKey": "your-bifrost-virtual-key"
+      }
+    ]
+  ],
+  "enabled_providers": ["bifrost"]
+}
+```
+
+Use the gateway root for `baseUrl`, without `/v1`; the plugin appends that path.
+The plugin creates `provider.bifrost` itself, so remove the previous manual
+Bifrost provider block. Connection values belong in the plugin options above
+unless you use the environment variables described below.
+
+This fork includes `dist` so Git installs work without lifecycle scripts or a
+local TypeScript compiler. After editing source, run `npm run build` and commit
+the updated `dist` files along with the source changes.
+
+### Published package
+
 1. Add the plugin to your `opencode.json`:
 
    ```json
