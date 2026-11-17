@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Datasheet } from "../src/datasheet.js";
 import { createBifrostPlugin } from "../src/plugin.js";
 
-const fakeInput = {} as PluginInput;
+const hostLog = vi.fn();
+const fakeInput = { client: { app: { log: hostLog } } } as unknown as PluginInput;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status });
@@ -22,11 +23,19 @@ let originalBaseUrl: string | undefined;
 let originalApiKey: string | undefined;
 
 beforeEach(() => {
+  hostLog.mockReset().mockResolvedValue({});
+  for (const method of ["log", "warn", "error"] as const) {
+    vi.spyOn(console, method).mockImplementation(() => {});
+  }
   originalBaseUrl = process.env.BIFROST_BASE_URL;
   originalApiKey = process.env.BIFROST_API_KEY;
 });
 
 afterEach(() => {
+  for (const method of ["log", "warn", "error"] as const) {
+    expect(console[method]).not.toHaveBeenCalled();
+  }
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   if (originalBaseUrl === undefined) delete process.env.BIFROST_BASE_URL;
   else process.env.BIFROST_BASE_URL = originalBaseUrl;
@@ -35,6 +44,21 @@ afterEach(() => {
 });
 
 describe("BifrostPlugin config hook", () => {
+  it("keeps repeated successful config loads silent", async () => {
+    process.env.BIFROST_BASE_URL = "https://bifrost.example.com";
+    process.env.BIFROST_API_KEY = "virtual-key";
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({
+      data: [{ id: "anthropic.claude-opus-5-5", context_length: 1_000_000, max_output_tokens: 128_000 }],
+    }))));
+    const hooks = await testPlugin();
+    for (let i = 0; i < 3; i++) {
+      const cfg: Record<string, any> = {};
+      await hooks.config?.(cfg as any);
+      expect(cfg.provider.bifrost.models["anthropic.claude-opus-5-5"]).toBeDefined();
+    }
+    expect(hostLog).not.toHaveBeenCalled();
+  });
+
   it("registers Claude 5.5 thinking choices for project aliases using JSON plugin options", async () => {
     delete process.env.BIFROST_BASE_URL;
     delete process.env.BIFROST_API_KEY;
@@ -69,6 +93,9 @@ describe("BifrostPlugin config hook", () => {
     await hooks.config?.(cfg as any);
 
     expect(cfg.provider).toBeUndefined();
+    expect(hostLog).toHaveBeenCalledWith({ body: {
+      service: "bifrost", level: "warn", message: expect.stringContaining("not configured"),
+    } });
   });
 
   it("registers a bifrost provider with discovered models when configured", async () => {
@@ -120,14 +147,39 @@ describe("BifrostPlugin config hook", () => {
     process.env.BIFROST_BASE_URL = "https://bifrost.example.com";
     process.env.BIFROST_API_KEY = "virtual-key";
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const hooks = await testPlugin();
     const cfg: Record<string, unknown> = {};
     await expect(hooks.config?.(cfg as any)).resolves.toBeUndefined();
 
     expect(cfg.provider).toBeUndefined();
-    errorSpy.mockRestore();
+    expect(hostLog).toHaveBeenCalledWith({ body: {
+      service: "bifrost", level: "error", message: "failed to discover models: connection refused",
+    } });
+  });
+
+  it("redacts the virtual key from discovery failure logs", async () => {
+    process.env.BIFROST_BASE_URL = "https://bifrost.example.com";
+    process.env.BIFROST_API_KEY = "virtual-key";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("rejected virtual-key")));
+    const hooks = await testPlugin();
+    await hooks.config?.({});
+    expect(hostLog).toHaveBeenCalledWith({ body: {
+      service: "bifrost", level: "error", message: "failed to discover models: rejected [redacted]",
+    } });
+  });
+
+  it.each(["reject", "throw", "pending"])("tolerates a host logger that will %s without terminal output", async (behavior) => {
+    delete process.env.BIFROST_BASE_URL;
+    delete process.env.BIFROST_API_KEY;
+    hostLog.mockImplementation(() => {
+      if (behavior === "throw") throw new Error("logger unavailable");
+      if (behavior === "reject") return Promise.reject(new Error("logger unavailable"));
+      return new Promise(() => {});
+    });
+    const hooks = await testPlugin();
+    await expect(hooks.config?.({})).resolves.toBeUndefined();
+    expect(hostLog).toHaveBeenCalledOnce();
   });
 
   it("does not register a provider when Bifrost reports zero models", async () => {
@@ -140,6 +192,9 @@ describe("BifrostPlugin config hook", () => {
     await hooks.config?.(cfg as any);
 
     expect(cfg.provider).toBeUndefined();
+    expect(hostLog).toHaveBeenCalledWith({ body: {
+      service: "bifrost", level: "warn", message: expect.stringContaining("discovery returned no models"),
+    } });
   });
 
   it("falls back to baseUrl/apiKey plugin options when env vars are unset", async () => {

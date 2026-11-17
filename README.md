@@ -95,10 +95,11 @@ These are only used as a fallback for whichever of `BIFROST_BASE_URL`/`BIFROST_A
 
 This plugin discovers models **once per plugin load** — v2 `setup`, v1 `config`. Restart opencode (or reload its config) to pick up newly added or removed Bifrost models.
 
-Startup output includes `[bifrost]` messages for discovery and the number of
-registered models, or an explanation if configuration is missing, discovery
-fails, or the gateway returns no models. On v1, use
-`opencode models bifrost --print-logs` to inspect this output.
+Successful discovery is silent, including on repeated config loads. The plugin
+does not write directly to stdout/stderr, which would disrupt OpenCode's terminal UI.
+On v1, configuration and discovery failures go to OpenCode's logger under the
+`bifrost` service; use `opencode models bifrost --print-logs` to inspect them.
+On v2, these failures are reported to the host as plugin setup errors.
 
 ## Reasoning effort
 

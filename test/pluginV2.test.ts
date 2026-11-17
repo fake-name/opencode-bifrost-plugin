@@ -48,11 +48,18 @@ let originalBaseUrl: string | undefined;
 let originalApiKey: string | undefined;
 
 beforeEach(() => {
+  for (const method of ["log", "warn", "error"] as const) {
+    vi.spyOn(console, method).mockImplementation(() => {});
+  }
   originalBaseUrl = process.env.BIFROST_BASE_URL;
   originalApiKey = process.env.BIFROST_API_KEY;
 });
 
 afterEach(() => {
+  for (const method of ["log", "warn", "error"] as const) {
+    expect(console[method]).not.toHaveBeenCalled();
+  }
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   if (originalBaseUrl === undefined) delete process.env.BIFROST_BASE_URL;
   else process.env.BIFROST_BASE_URL = originalBaseUrl;
@@ -86,14 +93,12 @@ describe("BifrostPlugin v2 setup", () => {
     }
   });
 
-  it("contributes nothing when the connection env vars are missing", async () => {
+  it("reports missing connection settings as a setup error", async () => {
     delete process.env.BIFROST_BASE_URL;
     delete process.env.BIFROST_API_KEY;
     vi.stubGlobal("fetch", vi.fn());
 
-    const { transform } = await runSetup();
-
-    expect(transform).not.toHaveBeenCalled();
+    await expect(runSetup()).rejects.toThrow("[bifrost] not configured:");
   });
 
   it("adds a bifrost provider with discovered models when configured", async () => {
@@ -155,17 +160,18 @@ describe("BifrostPlugin v2 setup", () => {
     expect(noTools.capabilities).toEqual({ tools: false, input: ["text"], output: ["text"] });
   });
 
-  it("does not throw and contributes nothing when discovery fails", async () => {
+  it("reports discovery failures to the host as setup errors", async () => {
     process.env.BIFROST_BASE_URL = "https://bifrost.example.com";
     process.env.BIFROST_API_KEY = "virtual-key";
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(runSetup()).rejects.toThrow("[bifrost] failed to discover models: connection refused");
+  });
 
-    const { transform } = await runSetup();
-
-    expect(transform).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledWith("[bifrost] failed to discover models: connection refused");
-    errorSpy.mockRestore();
+  it("redacts the virtual key from setup errors", async () => {
+    process.env.BIFROST_BASE_URL = "https://bifrost.example.com";
+    process.env.BIFROST_API_KEY = "virtual-key";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("rejected virtual-key")));
+    await expect(runSetup()).rejects.toThrow("[bifrost] failed to discover models: rejected [redacted]");
   });
 
   it("does not add a provider when Bifrost reports zero models", async () => {
@@ -173,9 +179,7 @@ describe("BifrostPlugin v2 setup", () => {
     process.env.BIFROST_API_KEY = "virtual-key";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: [] })));
 
-    const { transform } = await runSetup();
-
-    expect(transform).not.toHaveBeenCalled();
+    await expect(runSetup()).rejects.toThrow("[bifrost] discovery returned no models;");
   });
 
   it("falls back to baseUrl/apiKey plugin options when env vars are unset", async () => {

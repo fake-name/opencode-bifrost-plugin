@@ -15,26 +15,36 @@ const DISCOVERY_TIMEOUT_MS = 30_000;
  * via `Datasheet`'s own constructor, rather than this module reaching into the environment.
  */
 export function createBifrostPlugin(datasheet = new Datasheet()) {
-    return async (_input, options) => {
+    return async (input, options) => {
         const pluginOptions = options;
+        const log = (level, message) => {
+            // Raw console output corrupts OpenCode's TUI. Logging is best-effort and must not
+            // block config loading while the host itself is still starting up.
+            try {
+                void input.client.app.log({ body: { service: "bifrost", level, message } }).catch(() => { });
+            }
+            catch {
+                // Do not fall back to stdout/stderr if the host logger is unavailable.
+            }
+        };
         const config = async (cfg) => {
             const connection = getConnection(process.env, pluginOptions);
             if (!connection) {
                 // Not configured - leave opencode's config untouched rather than registering an empty provider.
-                console.warn("[bifrost] not configured: set a valid HTTP(S) baseUrl (or baseURL) and apiKey in plugin options, or BIFROST_BASE_URL and BIFROST_API_KEY.");
+                log("warn", "not configured: set a valid HTTP(S) baseUrl (or baseURL) and apiKey in plugin options, or BIFROST_BASE_URL and BIFROST_API_KEY.");
                 return;
             }
             let models;
             try {
-                console.error("[bifrost] discovering models from the configured gateway...");
                 models = await fetchModels(connection, AbortSignal.timeout(DISCOVERY_TIMEOUT_MS));
             }
             catch (err) {
-                console.error(`[bifrost] failed to discover models: ${err instanceof Error ? err.message : String(err)}`);
+                const message = (err instanceof Error ? err.message : String(err)).replaceAll(connection.apiKey, "[redacted]");
+                log("error", `failed to discover models: ${message}`);
                 return;
             }
             if (models.length === 0) {
-                console.warn("[bifrost] discovery returned no models; check the virtual key's model access in Bifrost.");
+                log("warn", "discovery returned no models; check the virtual key's model access in Bifrost.");
                 return;
             }
             const overrides = pluginOptions?.contextSizeOverrides ?? {};
@@ -49,7 +59,6 @@ export function createBifrostPlugin(datasheet = new Datasheet()) {
                 },
                 models: mapped,
             };
-            console.error(`[bifrost] registered ${models.length} models.`);
         };
         return { config };
     };

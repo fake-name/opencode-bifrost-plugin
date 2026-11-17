@@ -25,22 +25,19 @@ export function createBifrostSetup(datasheet = new Datasheet()) {
         const options = ctx.options;
         const connection = getConnection(process.env, options);
         if (!connection) {
-            // Not configured - contribute nothing rather than registering an empty provider.
-            console.warn("[bifrost] not configured: set a valid HTTP(S) baseUrl (or baseURL) and apiKey in plugin options, or BIFROST_BASE_URL and BIFROST_API_KEY.");
-            return;
+            // v2 has no context logger: let the host report setup errors without raw terminal output.
+            throw new Error("[bifrost] not configured: set a valid HTTP(S) baseUrl (or baseURL) and apiKey in plugin options, or BIFROST_BASE_URL and BIFROST_API_KEY.");
         }
         let models;
         try {
-            console.error("[bifrost] discovering models from the configured gateway...");
             models = await fetchModels(connection, AbortSignal.timeout(DISCOVERY_TIMEOUT_MS));
         }
         catch (err) {
-            console.error(`[bifrost] failed to discover models: ${err instanceof Error ? err.message : String(err)}`);
-            return;
+            const message = (err instanceof Error ? err.message : String(err)).replaceAll(connection.apiKey, "[redacted]");
+            throw new Error(`[bifrost] failed to discover models: ${message}`);
         }
         if (models.length === 0) {
-            console.warn("[bifrost] discovery returned no models; check the virtual key's model access in Bifrost.");
-            return;
+            throw new Error("[bifrost] discovery returned no models; check the virtual key's model access in Bifrost.");
         }
         const resolved = await resolveModels(models, options?.contextSizeOverrides ?? {}, datasheet);
         const providerID = Provider.ID.make(PROVIDER_ID);
@@ -60,7 +57,6 @@ export function createBifrostSetup(datasheet = new Datasheet()) {
                 models: mapped,
             });
         });
-        console.error(`[bifrost] registered ${models.length} models.`);
     };
 }
 //# sourceMappingURL=pluginV2.js.map
